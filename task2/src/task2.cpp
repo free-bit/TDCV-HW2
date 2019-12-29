@@ -5,7 +5,15 @@
 
 #include "HOGDescriptor.h"
 #include "RandomForest.h"
-#include "task2.h"
+#include "task2_utils.h"
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+  #define TRAIN "..\\..\\data\\task2\\train"
+  #define TEST "..\\..\\data\\task2\\test"
+#else //LINUX
+  #define TRAIN "../../data/task2/train"
+  #define TEST "../../data/task2/test"
+#endif
 
 using namespace std;
 
@@ -37,8 +45,8 @@ void testDTrees() {
 
 
 
-    performanceEval<cv::ml::DTrees>(tree, train_data);
-    performanceEval<cv::ml::DTrees>(tree, test_data);
+    // performanceEval<cv::ml::DTrees>(tree, train_data);
+    // performanceEval<cv::ml::DTrees>(tree, test_data);
 
 }
 
@@ -55,12 +63,18 @@ void testForest(){
 
     */
 
-    performanceEval<RandomForest>(forest, train_data);
-    performanceEval<RandomForest>(forest, test_data);
+    // performanceEval<RandomForest>(forest, train_data);
+    // performanceEval<RandomForest>(forest, test_data);
 }
 
 
 int main(){
+    string train_path(TRAIN);
+    readFiles(train_path);
+
+    // string test_path(TEST);
+    // readFiles(test_path);
+    
     testDTrees();
     testForest();
     return 0;

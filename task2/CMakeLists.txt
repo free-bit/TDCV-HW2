@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 2.8)
+project( task2 )
+find_package( OpenCV REQUIRED )
+include_directories( include ${OpenCV_INCLUDE_DIRS} )
+file( GLOB SRCS src/*.cpp)
+add_executable( task2 ${SRCS} )
+target_link_libraries( task2 ${OpenCV_LIBS} )
