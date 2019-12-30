@@ -24,9 +24,9 @@ public:
     void setMaxCategories(int maxCategories);
 	
 
-    void train(cv::Mat input_array,int layout, cv::Mat train_labels);
+    void train(cv::Ptr<cv::ml::TrainData> &data);
 
-    float predict(cv::Mat test_images);
+    float predict(cv::Mat &feats, cv::Mat &voted_preds);
 
 
 private:

@@ -1,4 +1,5 @@
 #include "HOGDescriptor.h"
+#include "hog_visualization.h"
 #include <iostream>
 
 void HOGDescriptor::initDetector() {
@@ -18,10 +19,11 @@ void HOGDescriptor::initDetector() {
 
 }
 
-
-void HOGDescriptor::visualizeHOG(cv::Mat img, std::vector<float> &feats, cv::HOGDescriptor hog_detector, int scale_factor) {
+// Use references to prevent OpenCV from copying hog_detector all the time!
+void HOGDescriptor::visualizeHOG(cv::Mat &img, std::vector<float> &feats, cv::HOGDescriptor &hog_detector, int scale_factor) {
     // Fill code here (already provided)
-	visualizeHOG(img, feats, hog_detector, scale_factor);
+	// Call function from the global scope. Otherwise, it calls the method itself and infinite recursion happens.
+	::visualizeHOG(img, feats, hog_detector, scale_factor);
 }
 
 void HOGDescriptor::detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, cv::Size sz, bool show) {
@@ -44,7 +46,7 @@ void HOGDescriptor::detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, c
 	hog_detector.compute(im, feat, sz, cv::Size(0, 0));
 
 	if (show) {
-		visualizeHOG(im, feat, hog_detector, 3);
+		visualizeHOG(im, feat, hog_detector, 10);
 	}
 
 

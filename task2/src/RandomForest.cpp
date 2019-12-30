@@ -64,41 +64,44 @@ void RandomForest::setMaxCategories(int maxCategories)
 
 
 
-void RandomForest::train(cv::Mat input_array,int layout, cv::Mat train_labels)
+void RandomForest::train(cv::Ptr<cv::ml::TrainData> &data)
 {
     // Fill
 	// input = training images (rowwise)
 	// layout = Rowwise 
 	// traing_labels as vector
 
-	int set_size = input_array.rows / mMaxCategories;
+    cv::Mat feats = data->getSamples();
+    cv::Mat gt_labels = data->getResponses();
+
+	int set_size = feats.rows / mMaxCategories;
 
 	for (int i = 0; i < mTreeCount; i++) {
-		std::vector<int> perm_indices = perm(input_array.rows);
+		std::vector<int> perm_indices = perm(feats.rows);
 
 		cv::Mat sub_input, sub_labels;
 
 		for (int j = 0; j < set_size; j++) {
-			sub_input.push_back(input_array.at<float>(perm_indices[j]));
-			sub_labels.push_back(train_labels.at<float>(perm_indices[j]));
+			sub_input.push_back(feats.row(perm_indices[j]));
+			sub_labels.push_back(gt_labels.row(perm_indices[j]));
 		}
-		mTrees[i]->train(sub_input, layout,sub_labels);
+		mTrees[i]->train(sub_input, cv::ml::ROW_SAMPLE, sub_labels);
 	}
 }
 
-float RandomForest::predict(cv::Mat test_images)
+float RandomForest::predict(cv::Mat &feats, cv::Mat &voted_preds)
 {
     // Fill
 	// We assumed: DT predicts us class labels 0...5 as float?
 
-	std::vector<int> voted_preds(test_images.rows);
-	std::vector<float> confidences(test_images.rows);
-	for (int i = 0; i < test_images.rows; i++) {
+	std::vector<int> voted_preds_vec(feats.rows);
+	std::vector<float> confidences(feats.rows);
+	for (int i = 0; i < feats.rows; i++) {
 
 		std::vector<int> preds(mMaxCategories);
 		for (int j = 0; j < mTreeCount; j++) {
 			cv::Mat label;
-			mTrees[j]->predict(test_images.at<float>(i), label);
+			mTrees[j]->predict(feats.row(i), label);
 			preds[label.at<float>(0,0)]++;//for each class count instances voted by trees
 		}
 		int max = -1;
@@ -109,13 +112,11 @@ float RandomForest::predict(cv::Mat test_images)
 				max_index = j;
 			}
 		}
-		voted_preds[i] = max_index;
+		voted_preds_vec[i] = max_index;
 		confidences[i] = max / mTreeCount;
-		
-
 	}
-
-
-
+	voted_preds = cv::Mat(voted_preds_vec).clone();
+    voted_preds.convertTo(voted_preds, CV_32F);
+	voted_preds = voted_preds.reshape(1, 1);
 }
 

@@ -52,7 +52,7 @@ public:
 
     void initDetector();
 
-    void visualizeHOG(cv::Mat img, std::vector<float> &feats, cv::HOGDescriptor hog_detector, int scale_factor);
+    void visualizeHOG(cv::Mat &img, std::vector<float> &feats, cv::HOGDescriptor &hog_detector, int scale_factor);
 
     void detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, cv::Size sz, bool show);
 
