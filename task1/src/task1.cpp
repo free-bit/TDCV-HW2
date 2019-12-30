@@ -65,6 +65,11 @@ int main(){
 
 	HOGDescriptor hog;
 	std::vector<float> feat;
+	hog.setWinSize(cv::Size(64, 64));
+	hog.setBlockSize(cv::Size(32, 32));
+	hog.setBlockStep(cv::Size(16, 16));
+	hog.setCellSize(cv::Size(8, 8));
+	// hog.setPadSize();
 
 	hog.detectHOGDescriptor(im, feat, cv::Size(0, 0), true);
 

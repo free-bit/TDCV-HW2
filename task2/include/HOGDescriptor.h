@@ -22,7 +22,7 @@ public:
     void setWinSize(cv::Size win_size) {
         //Fill
 		this->win_size = win_size;
-        
+        this->hog_detector.winSize = this->win_size;
     }
 
     cv::Size getWinSize(){
@@ -33,16 +33,19 @@ public:
     void setBlockSize(cv::Size block_size) {
         //Fill
 		this->block_size = block_size;
+        this->hog_detector.blockSize = this->block_size;
     }
 
     void setBlockStep(cv::Size block_step) {
        //Fill
 		this->block_step = block_step;
+        this->hog_detector.blockStride = this->block_step;
     }
 
     void setCellSize(cv::Size cell_size) {
       //Fill
 		this->cell_size = cell_size;
+        this->hog_detector.cellSize = this->cell_size;
     }
 
     void setPadSize(cv::Size sz) {
