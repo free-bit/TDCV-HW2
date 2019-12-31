@@ -18,6 +18,7 @@ public:
         is_init = false;
     };
 
+    void printParams();
 
     void setWinSize(cv::Size win_size) {
         //Fill
@@ -48,8 +49,12 @@ public:
         this->hog_detector.cellSize = this->cell_size;
     }
 
-    void setPadSize(cv::Size sz) {
-        auto pad_size = sz;
+    void setPadSize(cv::Size pad_size) {
+        this->pad_size = pad_size;
+    }
+
+    void setWinStride(cv::Size win_stride){
+        this->win_stride = win_stride;
     }
 
 
@@ -57,16 +62,18 @@ public:
 
     void visualizeHOG(cv::Mat &img, std::vector<float> &feats, cv::HOGDescriptor &hog_detector, int scale_factor);
 
-    void detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, cv::Size sz, bool show);
+    void detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, bool show);
 
     ~HOGDescriptor() {};
 
 
 private:
     cv::Size win_size;
+    cv::Size win_stride;
 	cv::Size block_size;
 	cv::Size block_step;
 	cv::Size cell_size;
+    cv::Size pad_size;
 
     cv::HOGDescriptor hog_detector;
 public:

@@ -6,16 +6,20 @@
 #include "HOGDescriptor.h"
 #include "RandomForest.h"
 #include "task2_utils.h"
+#include <fstream>
 #include <tuple>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
   #define TRAIN "..\\..\\data\\task3\\train"
   #define TEST "..\\..\\data\\task3\\test"
+  #define GT "..\\..\\data\\task3\\gt"
 #else //LINUX
   #define TRAIN "../../data/task3/train"
   #define TEST "../../data/task3/test"
+  #define GT "../../data/task3/gt"
 #endif
 #define BACKGROUND 3
+#define NUM_CLASS 3
 
 // using namespace std;
 
@@ -117,11 +121,9 @@ void testForest(){
     performanceEval<RandomForest>(forest, test_data);
 }
 
-
-void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride){
+void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std::vector<std::tuple<int, int, float, int>> &best_fit){
 
   std::vector<std::vector<std::tuple<int, int, float>>> box_descriptions(4, std::vector<std::tuple<int, int, float>>());
-  std::vector<std::vector<std::vector<int>>> valid_boxes(4, std::vector<std::vector<int>>());
 
   HOGDescriptor hog;
 	hog.setWinSize(cv::Size(64, 64));
@@ -130,10 +132,6 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride){
 	hog.setCellSize(cv::Size(8, 8));
 
   cv::Rect box(0 ,0, size, size);
-
-  //remove
-  // cv::Mat test_im = im.clone();
-  //
   
   for(int i = 0; i + size < im.rows; i += stride){
     box.y = i;
@@ -141,7 +139,7 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride){
       box.x = j;
       std::vector<float> crop_feat;
       cv::Mat crop = im(box);
-      hog.detectHOGDescriptor(crop, crop_feat, cv::Size(0, 0), false);
+      hog.detectHOGDescriptor(crop, crop_feat, false);
 
       cv::Mat crop_feat_mat = cv::Mat(crop_feat).clone();
       crop_feat_mat.convertTo(crop_feat_mat, CV_32F);
@@ -152,99 +150,89 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride){
       int label = pred.at<float>(0, 0);
       if (label != BACKGROUND){
         std::tuple<int, int, float> box_description;
-        std::get<0>(box_description) = j;
-        std::get<1>(box_description) = i;
+        std::get<0>(box_description) = j; //x
+        std::get<1>(box_description) = i; //y
         std::get<2>(box_description) = confidence[0];
         box_descriptions[label].push_back(box_description);
       }
-      //remove
-      // cv::rectangle(test_im, box, cv::Scalar(0, 0, 255), 3);
-      // cv::imshow("", test_im);
-      // cv::waitKey(0);
-      //
     }
   }
   // For each class
   for(int i = 0; i < box_descriptions.size(); i++){
-    // For each box detecting the class
+    int max_x = -1, max_y = -1;
+    float max_conf = 0;
+    // For each box found for the class
     for(int j = 0; j < box_descriptions[i].size(); j++){
-      int x1 = std::get<0>(box_descriptions[i][j]);
-      int y1 = std::get<1>(box_descriptions[i][j]);
-      float conf1 = std::get<2>(box_descriptions[i][j]);
-      cv::Rect box1(x1 ,y1, size, size);
-      // take a second box from the list
-      for(int k = j + 1; k < box_descriptions[i].size(); k++){
-        int x2 = std::get<0>(box_descriptions[i][k]);
-        int y2 = std::get<1>(box_descriptions[i][k]);
-        float conf2 = std::get<2>(box_descriptions[i][k]);
-        cv::Rect box2(x2 ,y2, size, size); 
-        // Non overlapping box1 & box2
-        if (box2.x+size < box1.x || box1.x+size < box2.x || box1.y+size < box2.y || box2.y+size < box1.y){
-          std::vector<int> pair1 = {box1.x, box1.y};
-          valid_boxes[i].push_back(pair1);
-          std::vector<int> pair2 = {box2.x, box2.y};
-          valid_boxes[i].push_back(pair2);
-          cv::putText(im, "No overlap", cv::Point(box1.x,box1.y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250));
-          cv::putText(im, "No overlap", cv::Point(box2.x,box2.y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(250,0,200));
-        }
-        //Overlap happens
-        else{
-          if(conf1 >= conf2){
-            std::vector<int> pair = {box1.x, box1.y};
-            valid_boxes[i].push_back(pair);
-            std::cout<<"Overlap in class:"<<i<<std::endl;
-          }
-          else{
-            std::vector<int> pair = {box2.x, box2.y};
-            valid_boxes[i].push_back(pair);
-            std::cout<<"Overlap in class:"<<i<<std::endl;
-          }
+      std::tuple<int, int, float> box_description = box_descriptions[i][j];
+      int x = std::get<0>(box_description);
+      int y = std::get<1>(box_description);
+      float conf = std::get<2>(box_description);
+
+      // Get the box with the highest confidence
+      if (conf > max_conf){
+        max_x = x;
+        max_y = y;
+        max_conf = conf;
+        // Compare the current box for ith class with the max one found from other scales
+        float best_conf = std::get<2>(best_fit[i]);
+        if (max_conf > best_conf){
+          std::get<0>(best_fit[i]) = max_x;
+          std::get<1>(best_fit[i]) = max_y;
+          std::get<2>(best_fit[i]) = max_conf;
+          std::get<3>(best_fit[i]) = size;
         }
       }
     }
   }
-
-  //
-  cv::Scalar red(255, 0, 0);
-  cv::Scalar green(0, 255, 0);
-  cv::Scalar blue(0, 0, 255);
-  std::vector<cv::Scalar> colors = {red, green, blue};
-  int i = 0;
-  for(const auto &classes : valid_boxes){
-    for(const auto &box_params : classes){
-      cv::Rect box(box_params[0], box_params[1], size, size);
-      cv::rectangle(im, box, colors[i], 3);
-    }
-    i++;
-  }
-  cv::imshow("", im);
-  cv::waitKey(0);
-  //
 }
 
-/*
-1) Crop: OK
--> HOG: OK
-2) Predict: OK
-3) Check if background: 3?
-4) If not background save object index, box top-left, (we know the size), confidence: OK
-5) If bounding boxes overlap take the highest confidence OK
-for each class:
-  if overlap:
-    remove overlap based on confidence
+std::vector<std::tuple<int, int, float, int>> tryDifferentScale(RandomForest &forest, cv::Mat &im, int start_size, int end_size, int size_step, int box_stride){
+  std::vector<std::tuple<int, int, float, int>> best_fit(3, std::tuple<int, int, float, int>(-1, -1, 0, 0)); //Per file return 3 box parameters
+  for(int size = start_size; size <= end_size; size += size_step){
+    slidingWindow(forest, im, size, box_stride, best_fit);
+  }
+  return best_fit;
+}
 
-draw
-  
-*/
+std::vector<cv::Rect> readGT(std::string path){
+  std::vector<cv::Rect> gt_boxes_per_file;
+  std::ifstream file(path);
+  std::string line;
 
+  while(std::getline(file, line)){
+      std::stringstream linestream(line);
+      std::string data;
+      int cls, x_top, y_top, x_bot, y_bot;
+
+      linestream >> cls >> x_top >> y_top >> x_bot >> y_bot;
+      gt_boxes_per_file.push_back(cv::Rect(x_top, y_top, x_bot-x_top, y_bot-y_top));
+  }
+  return gt_boxes_per_file;
+}
+
+int getIOU(const cv::Rect &pred_box, const cv::Rect &gt_box, float thresh){
+  float i = (pred_box & gt_box).area();
+  float u = (pred_box | gt_box).area();
+  std::cout<<"Intersection/Union area: "<<(i / u)<<std::endl;
+  return (i / u) > thresh;
+}
 
 int main(){
-    //TODO: Read one test image for now, later read all
-    std::string path("../../data/task3/test/0000.jpg");
-    cv::Mat im = cv::imread(path);
-    //
+    cv::Scalar red(0, 0, 255);  //Class-0
+    cv::Scalar green(0, 255, 0);//Class-1
+    cv::Scalar blue(255, 0, 0); //Class-2
+    std::vector<cv::Scalar> colors = {red, green, blue};
+    std::string path(GT);
+    std::vector<std::string> filepaths;
+    cv::glob(path, filepaths, true);
+    std::vector<std::vector<cv::Rect>> gt_boxes;
+    for(int i = 0; i < filepaths.size(); i++){
+      std::vector<cv::Rect> boxes_per_image = readGT(filepaths[i]);
+      gt_boxes.push_back(boxes_per_image);
+    }
 
-    int treeCount = 15, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 6;
+    // Initialize forest
+    int treeCount = 10, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 4;
     RandomForest forest(treeCount, maxDepth, CVFolds, minSampleCount, maxCategories);    
 
     // Load train images and labels
@@ -257,8 +245,52 @@ int main(){
     // Train the forest
     forest.train(train_data);
 
-    slidingWindow(forest, im, 200, 25);
-    //testDTrees();
-    //testForest();
+    cv::Mat im;
+    path = TEST;
+    std::vector<std::string> imagepaths;
+    cv::glob(path, imagepaths, true);
+    float tp = 0, fp = 0, fn = 0;
+    std::vector<std::tuple<int, int, float, int>> pred_boxes;
+
+    std::ofstream file("../pc_data.txt");
+    int start_size = 50, end_size = 200, size_step = 25, box_stride = 10;
+    //Iterate over different thresh values
+    for(float thresh = 0.5; thresh <= 1; thresh += 1){
+      for(int i = 0; i < imagepaths.size(); i++){//TODO: loop until imagepaths.size()
+        im = cv::imread(imagepaths[i]);
+        pred_boxes = tryDifferentScale(forest, im, start_size, end_size, size_step, box_stride);
+        //j is class index
+        for(int j = 0; j < gt_boxes[i].size(); j++){
+          cv::rectangle(im, gt_boxes[i][j], cv::Scalar(0, 0, 0), 2);//TODO: Drawing gt remove later
+          int x = std::get<0>(pred_boxes[j]);
+          int y = std::get<1>(pred_boxes[j]);
+          int size = std::get<3>(pred_boxes[j]);
+          // If it detects the class and generates a valid box
+          if (x != -1){
+            cv::Rect pred_box(x, y, size, size);
+            // If it detects correctly
+            if (getIOU(pred_box, gt_boxes[i][j], thresh))
+              tp += 1;
+            // If it detects incorrectly
+            else
+              fp += 1;
+            cv::rectangle(im, pred_box, colors[j], 2);//TODO: Drawing prediction remove later
+          }
+          // Else if it can not detect it
+          else
+            fn += 1;
+        }
+        cv::imshow("", im);
+        cv::waitKey(0);
+      }
+      float prec = tp / (tp+fp);
+      float rec = tp / (tp+fn);
+      std::cout<<"TP: "<<tp<<std::endl;
+      std::cout<<"FP: "<<fp<<std::endl;
+      std::cout<<"FN: "<<fn<<std::endl;
+      // std::cout<<"P: "<<prec<<std::endl;
+      // std::cout<<"R: "<<rec<<std::endl;
+      file<<thresh<<" "<<prec<<" "<<rec<<std::endl;
+    }
     return 0;
 }

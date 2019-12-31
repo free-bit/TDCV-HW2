@@ -2,16 +2,25 @@
 #include "hog_visualization.h"
 #include <iostream>
 
+void HOGDescriptor::printParams(){
+	std::cout<<"Parameters:"<<std::endl;
+	std::cout<<"Window Size: "<<win_size<<std::endl;
+	std::cout<<"Window Stride: "<<win_stride<<std::endl;
+	std::cout<<"Block Size: "<<block_size<<std::endl;
+	std::cout<<"Block Step: "<<block_step<<std::endl;
+	std::cout<<"Cell Size: "<<cell_size<<std::endl;
+	std::cout<<"Pad Size: "<<pad_size<<std::endl;
+}
+
 void HOGDescriptor::initDetector() {
     // Initialize hog detector
 	//initialize default parameters(win_size, block_size, block_step,....)
 	win_size = cv::Size(64, 64);
-
-	//Fill other parameters here
-	//Included
 	block_size = cv::Size(16, 16);
-	cell_size = cv::Size(4, 4);
-	block_step = cv::Size(2, 2);
+	block_step = cv::Size(8, 8);
+	cell_size = cv::Size(8, 8);
+	win_stride = cv::Size(0, 0);
+	pad_size = cv::Size(0, 0);
 
 	hog_detector = cv::HOGDescriptor(win_size, block_size, block_step, cell_size, 9);
     //Fill code here
@@ -26,7 +35,7 @@ void HOGDescriptor::visualizeHOG(cv::Mat &img, std::vector<float> &feats, cv::HO
 	::visualizeHOG(img, feats, hog_detector, scale_factor);
 }
 
-void HOGDescriptor::detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, cv::Size sz, bool show) {
+void HOGDescriptor::detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, bool show) {
 	//im: image
 	//feat: descriptors
 	//sz: window stride: multiple of block stride
@@ -40,15 +49,12 @@ void HOGDescriptor::detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, c
 	* use the built in function "compute" to get the HOG descriptors
 	*/
 
-	//int border = 50;
-	//cv::copyMakeBorder(im, im_pad, border, border, border, border, cv::BORDER_REPLICATE);
-	cv::resize(im, im, cv::Size(64, 64), cv::INTER_CUBIC);
-	hog_detector.compute(im, feat, sz, cv::Size(0, 0));
+	cv::resize(im, im, cv::Size(64, 64));
+	hog_detector.compute(im, feat, win_stride, pad_size);
 
 	if (show) {
 		visualizeHOG(im, feat, hog_detector, 10);
 	}
-
 
 
 
