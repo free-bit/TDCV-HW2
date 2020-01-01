@@ -1,4 +1,3 @@
-
 #include <opencv2/opencv.hpp>
 #include <iostream>
 
@@ -20,8 +19,11 @@
 #endif
 #define BACKGROUND 3
 #define NUM_CLASS 3
-#define CONF_THRESH 0.6
-#define IOU_RESOLUTION 1.0
+#define IOU_THRESH 0.5
+#define CONF_RESOLUTION 1.0    //40
+#define LOWER_CONF_THRESH 0.6  //0.5
+#define HIGHER_CONF_THRESH 1.0 //0.9
+#define VISUAL_INDEX 0
 
 // using namespace std;
 
@@ -49,83 +51,9 @@ void performanceEval(cv::Ptr<ClassifierType> classifier, cv::Ptr<cv::ml::TrainDa
     std::cout<<"Accuracy: "<<accuracy<<std::endl;
 };
 
+void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std::vector<std::tuple<int, int, float, int>> &best_fit, float conf_thresh){
 
-void testDTrees() {
-
-    int num_classes = 6;
-
-    /* 
-      * Create your data (i.e Use HOG from task 1 to compute the descriptor for your images)
-      * Train a single Decision Tree and evaluate the performance 
-      * Experiment with the MaxDepth parameter, to see how it affects the performance
-    */
-    // Create and init one decision tree
-    cv::Ptr<cv::ml::DTrees> dtree = cv::ml::DTrees::create();
-    dtree->setMaxDepth(20);
-		dtree->setCVFolds(1);
-		dtree->setMinSampleCount(1);
-		dtree->setMaxCategories(6);
-
-    // Load train images and labels
-    std::string train_path(TRAIN);
-    cv::Mat train_gt_labels;
-    cv::Mat train_feats;
-    readFiles(train_path, train_gt_labels, train_feats);
-    cv::Ptr<cv::ml::TrainData> train_data =  cv::ml::TrainData::create(train_feats, cv::ml::ROW_SAMPLE, train_gt_labels);
-
-    // Train the tree
-    dtree->train(train_data);
-
-    // Load test images and labels
-    std::string test_path(TEST);
-    cv::Mat test_gt_labels;
-    cv::Mat test_feats;
-    readFiles(test_path, test_gt_labels, test_feats);
-    cv::Ptr<cv::ml::TrainData> test_data =  cv::ml::TrainData::create(test_feats, cv::ml::ROW_SAMPLE, test_gt_labels);
-
-    performanceEval<cv::ml::DTrees>(dtree, train_data);
-    performanceEval<cv::ml::DTrees>(dtree, test_data);
-
-}
-
-
-void testForest(){
-
-    int treeCount = 15, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 6;
-    /* 
-      * 
-      * Create your data (i.e Use HOG from task 1 to compute the descriptor for your images)
-      * Train a Forest and evaluate the performance 
-      * Experiment with the MaxDepth & TreeCount parameters, to see how it affects the performance
-
-    */
-    // Create and init random forest
-    cv::Ptr<RandomForest> forest = new RandomForest(treeCount, maxDepth, CVFolds, minSampleCount, maxCategories);
-    
-    // Load train images and labels
-    std::string train_path(TRAIN);
-    cv::Mat train_gt_labels;
-    cv::Mat train_feats;
-    readFiles(train_path, train_gt_labels, train_feats);
-    cv::Ptr<cv::ml::TrainData> train_data =  cv::ml::TrainData::create(train_feats, cv::ml::ROW_SAMPLE, train_gt_labels);
-
-    // Train the forest
-    forest->train(train_data);
-
-    // Load test images and labels
-    std::string test_path(TEST);
-    cv::Mat test_gt_labels;
-    cv::Mat test_feats;
-    readFiles(test_path, test_gt_labels, test_feats);
-    cv::Ptr<cv::ml::TrainData> test_data =  cv::ml::TrainData::create(test_feats, cv::ml::ROW_SAMPLE, test_gt_labels);
-
-    performanceEval<RandomForest>(forest, train_data);
-    performanceEval<RandomForest>(forest, test_data);
-}
-
-void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std::vector<std::tuple<int, int, float, int>> &best_fit){
-
-  std::vector<std::vector<std::tuple<int, int, float>>> box_descriptions(4, std::vector<std::tuple<int, int, float>>());
+  std::vector<std::vector<std::tuple<int, int, float>>> box_descriptions(NUM_CLASS, std::vector<std::tuple<int, int, float>>());
 
   HOGDescriptor hog;
 	hog.setWinSize(cv::Size(64, 64));
@@ -177,8 +105,7 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std:
         max_conf = conf;
         // Compare the current box for ith class with the max one found from other scales
         float best_conf = std::get<2>(best_fit[i]);
-        // TODO:We need to get best_fit array per different CONF_THRESH
-        if (max_conf > best_conf && max_conf > CONF_THRESH){
+        if (max_conf > best_conf && max_conf > conf_thresh){
           std::get<0>(best_fit[i]) = max_x;
           std::get<1>(best_fit[i]) = max_y;
           std::get<2>(best_fit[i]) = max_conf;
@@ -189,18 +116,30 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std:
   }
 }
 
-std::vector<std::tuple<int, int, float, int>> tryDifferentScale(RandomForest &forest, cv::Mat &im, int start_size, int end_size, int size_step, int box_stride){
+std::vector<std::tuple<int, int, float, int>> tryDifferentScale(RandomForest &forest, cv::Mat &im, int start_size, int end_size, int size_step, int box_stride, float conf_thresh){
   int x = -1, y = -1, conf = 0.0, size = 0;
   std::vector<std::tuple<int, int, float, int>> best_fit(3, std::tuple<int, int, float, int>(x, y, conf, size)); //Per file return 3 box parameters
   for(int size = start_size; size <= end_size; size += size_step){
-    slidingWindow(forest, im, size, box_stride, best_fit);
+    slidingWindow(forest, im, size, box_stride, best_fit, conf_thresh);
   }
   //TODO: Remove later: Print highest confidences achieved over scales
-  printf("Class-%d, confidence: %.2f\n", 0, std::get<2>(best_fit[0]));
-  printf("Class-%d, confidence: %.2f\n", 1, std::get<2>(best_fit[1]));
-  printf("Class-%d, confidence: %.2f\n", 2, std::get<2>(best_fit[2]));
+  // printf("Class-%d, confidence: %.2f\n", 0, std::get<2>(best_fit[0]));
+  // printf("Class-%d, confidence: %.2f\n", 1, std::get<2>(best_fit[1]));
+  // printf("Class-%d, confidence: %.2f\n", 2, std::get<2>(best_fit[2]));
   //
   return best_fit;
+}
+
+std::vector<std::vector<std::tuple<int, int, float, int>>> tryDifferentConfThresh(RandomForest &forest, cv::Mat &im, int start_size, int end_size, int size_step, int box_stride){
+  // Keep best bounding boxes for all confidence thresholds
+  std::vector<std::vector<std::tuple<int, int, float, int>>> best_fits;
+  // Keep best bounding box for a specific confidence threshold
+  std::vector<std::tuple<int, int, float, int>> best_fit;
+  for(float conf_thresh = LOWER_CONF_THRESH; conf_thresh <= HIGHER_CONF_THRESH; conf_thresh += 1/CONF_RESOLUTION){
+    best_fit = tryDifferentScale(forest, im, start_size, end_size, size_step, box_stride, conf_thresh);
+    best_fits.push_back(best_fit);
+  }
+  return best_fits;
 }
 
 std::vector<cv::Rect> readGT(std::string path){
@@ -222,7 +161,7 @@ std::vector<cv::Rect> readGT(std::string path){
 int getIOU(const cv::Rect &pred_box, const cv::Rect &gt_box, float thresh){
   float i = (pred_box & gt_box).area();
   float u = (pred_box | gt_box).area();
-  std::cout<<"Intersection/Union area: "<<(i / u)<<std::endl;
+  //std::cout<<"Intersection/Union area: "<<(i / u)<<std::endl;
   return (i / u) > thresh;
 }
 
@@ -241,7 +180,7 @@ int main(){
     }
 
     // Initialize forest
-    int treeCount = 100, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 4;
+    int treeCount = 200, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 4;
     RandomForest forest(treeCount, maxDepth, CVFolds, minSampleCount, maxCategories);    
 
     // Load train images and labels
@@ -258,67 +197,67 @@ int main(){
     path = TEST;
     std::vector<std::string> imagepaths;
     cv::glob(path, imagepaths, true);
-    std::vector<std::tuple<int, int, float, int>> pred_boxes;
+    std::vector<std::vector<std::tuple<int, int, float, int>>> best_fits;
 
     std::ofstream file("../pc_data.txt");
-    int start_size = 50, end_size = 250, size_step = 10, box_stride = 10;
+    int start_size = 70, end_size = 210, size_step = 10, box_stride = 10;
     // Create vector of IOU threshold values
-    std::vector<std::tuple<float, int, int>> evaluate_pr; //float: threshold, int-1: tp, int-2: fp
-    for(float i = 0.5; i <= IOU_RESOLUTION; i++){
-      evaluate_pr.push_back(std::tuple<float, int, int>(i/IOU_RESOLUTION, 0, 0));
+    std::vector<std::tuple<float, int, int, int>> evaluate_pr; //float: threshold, int-1: tp, int-2: fp, int-3: fn
+    for(float i = LOWER_CONF_THRESH; i <= HIGHER_CONF_THRESH; i += 1/CONF_RESOLUTION){
+      evaluate_pr.push_back(std::tuple<float, int, int, int>(i, 0, 0, 0));
     }
-    float fn = 0;
 
     // For each image: i is the file index
     for(int i = 0; i < imagepaths.size(); i++){
       printf("Detecting image-%d...\n", i);
       im = cv::imread(imagepaths[i]);
-      pred_boxes = tryDifferentScale(forest, im, start_size, end_size, size_step, box_stride);
+      best_fits = tryDifferentConfThresh(forest, im, start_size, end_size, size_step, box_stride);
       // For each class: j is the class index
       for(int j = 0; j < gt_boxes[i].size(); j++){
         cv::rectangle(im, gt_boxes[i][j], cv::Scalar(0, 0, 0), 2); //TODO: Drawing gt remove later
-        int x = std::get<0>(pred_boxes[j]);
-        int y = std::get<1>(pred_boxes[j]);
-        int size = std::get<3>(pred_boxes[j]);
-        // If it detects the class and generates a valid box
-        if (x != -1){
-          cv::Rect pred_box(x, y, size, size);
-          // For each IOU thresholds evaluate TP, FP
-          float thresh;
-          for(auto &pr_thresh : evaluate_pr){
-            thresh = std::get<0>(pr_thresh);
+        cv::Rect visual_box;
+        // For each confidence threshold
+        for(int k = 0; k < best_fits.size(); k++){
+          int x = std::get<0>(best_fits[k][j]);
+          int y = std::get<1>(best_fits[k][j]);
+          int size = std::get<3>(best_fits[k][j]);
+          // If the box is valid
+          if (x != -1){
+            cv::Rect pred_box(x, y, size, size);
+            if(k == VISUAL_INDEX)
+              visual_box = pred_box;
             // If it detects correctly under thresh
-            if (getIOU(pred_box, gt_boxes[i][j], thresh))
-              std::get<1>(pr_thresh) += 1;
+            if (getIOU(pred_box, gt_boxes[i][j], IOU_THRESH))
+              std::get<1>(evaluate_pr[k]) += 1;
             // If it detects incorrectly under thresh
             else
-              std::get<2>(pr_thresh) += 1;
+              std::get<2>(evaluate_pr[k]) += 1;
           }
-          cv::rectangle(im, pred_box, colors[j], 2); // Drawing prediction remove later
+          else
+            std::get<3>(evaluate_pr[k]) += 1;
         }
-        // Else if it can not detect it
-        else
-          fn += 1;
+        cv::rectangle(im, visual_box, colors[j], 2); // Drawing prediction from one of the confidence thresholds 
       }
       cv::imshow("", im);
-      cv::waitKey(2000); // Wait 2 secs
+      cv::waitKey(500); // Wait 0.5 secs
 
       printf("Detecting image-%d completed.\n", i);
     }
-    int tp, fp;
-    float thresh, prec, rec;
+    int tp, fp, fn;
+    float conf_thresh, prec, rec;
     for(const auto &pr_thresh : evaluate_pr){
-      // std::cout<<"TP: "<<tp<<std::endl;
-      // std::cout<<"FP: "<<fp<<std::endl;
-      // std::cout<<"FN: "<<fn<<std::endl;
-      // std::cout<<"P: "<<prec<<std::endl;
-      // std::cout<<"R: "<<rec<<std::endl;
-      thresh = std::get<0>(pr_thresh);
+      conf_thresh = std::get<0>(pr_thresh);
       tp = std::get<1>(pr_thresh);
       fp = std::get<2>(pr_thresh);
+      fn = std::get<3>(pr_thresh);
       prec = tp / (float) (tp + fp);
       rec = tp / (float) (tp + fn);
-      file<<thresh<<" "<<prec<<" "<<rec<<std::endl;
+      std::cout<<"TP: "<<tp<<std::endl;
+      std::cout<<"FP: "<<fp<<std::endl;
+      std::cout<<"FN: "<<fn<<std::endl;
+      // std::cout<<"P: "<<prec<<std::endl;
+      // std::cout<<"R: "<<rec<<std::endl;
+      file<<conf_thresh<<" "<<prec<<" "<<rec<<std::endl;
     }
     return 0;
 }

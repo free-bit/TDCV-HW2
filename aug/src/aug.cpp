@@ -30,7 +30,7 @@ void augmentImages(std::string path, std::string output_path){
 	std::smatch re_match;
 		
 	// For filepath in filepaths
-	for(int i = 0; i < n_rows; i++){
+	for(int i = 0; i < filepaths.size(); i++){
         std::regex_match(filepaths[i], re_match, re);
 		    std::string class_name = re_match[1].str();
         std::string name = re_match[2].str();
