@@ -20,6 +20,8 @@
 #endif
 #define BACKGROUND 3
 #define NUM_CLASS 3
+#define CONF_THRESH 0.6
+#define IOU_RESOLUTION 1.0
 
 // using namespace std;
 
@@ -175,7 +177,8 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std:
         max_conf = conf;
         // Compare the current box for ith class with the max one found from other scales
         float best_conf = std::get<2>(best_fit[i]);
-        if (max_conf > best_conf){
+        // TODO:We need to get best_fit array per different CONF_THRESH
+        if (max_conf > best_conf && max_conf > CONF_THRESH){
           std::get<0>(best_fit[i]) = max_x;
           std::get<1>(best_fit[i]) = max_y;
           std::get<2>(best_fit[i]) = max_conf;
@@ -187,10 +190,16 @@ void slidingWindow(RandomForest &forest, cv::Mat &im, int size, int stride, std:
 }
 
 std::vector<std::tuple<int, int, float, int>> tryDifferentScale(RandomForest &forest, cv::Mat &im, int start_size, int end_size, int size_step, int box_stride){
-  std::vector<std::tuple<int, int, float, int>> best_fit(3, std::tuple<int, int, float, int>(-1, -1, 0, 0)); //Per file return 3 box parameters
+  int x = -1, y = -1, conf = 0.0, size = 0;
+  std::vector<std::tuple<int, int, float, int>> best_fit(3, std::tuple<int, int, float, int>(x, y, conf, size)); //Per file return 3 box parameters
   for(int size = start_size; size <= end_size; size += size_step){
     slidingWindow(forest, im, size, box_stride, best_fit);
   }
+  //TODO: Remove later: Print highest confidences achieved over scales
+  printf("Class-%d, confidence: %.2f\n", 0, std::get<2>(best_fit[0]));
+  printf("Class-%d, confidence: %.2f\n", 1, std::get<2>(best_fit[1]));
+  printf("Class-%d, confidence: %.2f\n", 2, std::get<2>(best_fit[2]));
+  //
   return best_fit;
 }
 
@@ -232,7 +241,7 @@ int main(){
     }
 
     // Initialize forest
-    int treeCount = 10, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 4;
+    int treeCount = 100, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 4;
     RandomForest forest(treeCount, maxDepth, CVFolds, minSampleCount, maxCategories);    
 
     // Load train images and labels
@@ -249,47 +258,66 @@ int main(){
     path = TEST;
     std::vector<std::string> imagepaths;
     cv::glob(path, imagepaths, true);
-    float tp = 0, fp = 0, fn = 0;
     std::vector<std::tuple<int, int, float, int>> pred_boxes;
 
     std::ofstream file("../pc_data.txt");
-    int start_size = 50, end_size = 200, size_step = 25, box_stride = 10;
-    //Iterate over different thresh values
-    for(float thresh = 0.5; thresh <= 1; thresh += 1){
-      for(int i = 0; i < imagepaths.size(); i++){//TODO: loop until imagepaths.size()
-        im = cv::imread(imagepaths[i]);
-        pred_boxes = tryDifferentScale(forest, im, start_size, end_size, size_step, box_stride);
-        //j is class index
-        for(int j = 0; j < gt_boxes[i].size(); j++){
-          cv::rectangle(im, gt_boxes[i][j], cv::Scalar(0, 0, 0), 2);//TODO: Drawing gt remove later
-          int x = std::get<0>(pred_boxes[j]);
-          int y = std::get<1>(pred_boxes[j]);
-          int size = std::get<3>(pred_boxes[j]);
-          // If it detects the class and generates a valid box
-          if (x != -1){
-            cv::Rect pred_box(x, y, size, size);
-            // If it detects correctly
+    int start_size = 50, end_size = 250, size_step = 10, box_stride = 10;
+    // Create vector of IOU threshold values
+    std::vector<std::tuple<float, int, int>> evaluate_pr; //float: threshold, int-1: tp, int-2: fp
+    for(float i = 0.5; i <= IOU_RESOLUTION; i++){
+      evaluate_pr.push_back(std::tuple<float, int, int>(i/IOU_RESOLUTION, 0, 0));
+    }
+    float fn = 0;
+
+    // For each image: i is the file index
+    for(int i = 0; i < imagepaths.size(); i++){
+      printf("Detecting image-%d...\n", i);
+      im = cv::imread(imagepaths[i]);
+      pred_boxes = tryDifferentScale(forest, im, start_size, end_size, size_step, box_stride);
+      // For each class: j is the class index
+      for(int j = 0; j < gt_boxes[i].size(); j++){
+        cv::rectangle(im, gt_boxes[i][j], cv::Scalar(0, 0, 0), 2); //TODO: Drawing gt remove later
+        int x = std::get<0>(pred_boxes[j]);
+        int y = std::get<1>(pred_boxes[j]);
+        int size = std::get<3>(pred_boxes[j]);
+        // If it detects the class and generates a valid box
+        if (x != -1){
+          cv::Rect pred_box(x, y, size, size);
+          // For each IOU thresholds evaluate TP, FP
+          float thresh;
+          for(auto &pr_thresh : evaluate_pr){
+            thresh = std::get<0>(pr_thresh);
+            // If it detects correctly under thresh
             if (getIOU(pred_box, gt_boxes[i][j], thresh))
-              tp += 1;
-            // If it detects incorrectly
+              std::get<1>(pr_thresh) += 1;
+            // If it detects incorrectly under thresh
             else
-              fp += 1;
-            cv::rectangle(im, pred_box, colors[j], 2);//TODO: Drawing prediction remove later
+              std::get<2>(pr_thresh) += 1;
           }
-          // Else if it can not detect it
-          else
-            fn += 1;
+          cv::rectangle(im, pred_box, colors[j], 2); // Drawing prediction remove later
         }
-        cv::imshow("", im);
-        cv::waitKey(0);
+        // Else if it can not detect it
+        else
+          fn += 1;
       }
-      float prec = tp / (tp+fp);
-      float rec = tp / (tp+fn);
-      std::cout<<"TP: "<<tp<<std::endl;
-      std::cout<<"FP: "<<fp<<std::endl;
-      std::cout<<"FN: "<<fn<<std::endl;
+      cv::imshow("", im);
+      cv::waitKey(2000); // Wait 2 secs
+
+      printf("Detecting image-%d completed.\n", i);
+    }
+    int tp, fp;
+    float thresh, prec, rec;
+    for(const auto &pr_thresh : evaluate_pr){
+      // std::cout<<"TP: "<<tp<<std::endl;
+      // std::cout<<"FP: "<<fp<<std::endl;
+      // std::cout<<"FN: "<<fn<<std::endl;
       // std::cout<<"P: "<<prec<<std::endl;
       // std::cout<<"R: "<<rec<<std::endl;
+      thresh = std::get<0>(pr_thresh);
+      tp = std::get<1>(pr_thresh);
+      fp = std::get<2>(pr_thresh);
+      prec = tp / (float) (tp + fp);
+      rec = tp / (float) (tp + fn);
       file<<thresh<<" "<<prec<<" "<<rec<<std::endl;
     }
     return 0;

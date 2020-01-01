@@ -70,7 +70,7 @@ void RandomForest::train(cv::Ptr<cv::ml::TrainData> &data)
     cv::Mat feats = data->getSamples();
     cv::Mat gt_labels = data->getResponses();
 	// set_size is the size of the subset of the training data
-	int set_size = feats.rows / mMaxCategories;
+	int set_size = feats.rows / 10;
 
 	for (int i = 0; i < mTreeCount; i++) {
 		std::vector<int> perm_indices = perm(feats.rows); // permuted indices of size number of training data
@@ -88,8 +88,6 @@ void RandomForest::train(cv::Ptr<cv::ml::TrainData> &data)
 
 std::vector<float> RandomForest::predict(cv::Mat &feats, cv::Mat &voted_preds)
 {
-	std::cout<<"RandomForest::predict runs..."<<std::endl;
-
 	std::vector<int> voted_preds_vec(feats.rows);
 	std::vector<float> confidences(feats.rows);
 	for (int i = 0; i < feats.rows; i++) {
@@ -108,13 +106,12 @@ std::vector<float> RandomForest::predict(cv::Mat &feats, cv::Mat &voted_preds)
 				max_index = j;
 			}
 		}
-		voted_preds_vec[i] = max_index;
-		confidences[i] = max / (float) mTreeCount;
+		voted_preds_vec[i] = max_index;			   // Per image keep the predicted class index
+		confidences[i] = max / (float) mTreeCount; // Per image take confidence of top voted class
 	}
 	voted_preds = cv::Mat(voted_preds_vec).clone();
     voted_preds.convertTo(voted_preds, CV_32F);
 	voted_preds = voted_preds.reshape(1, 1);
-	std::cout<<"RandomForest::predict finished"<<std::endl;
 	return confidences;
 }
 
