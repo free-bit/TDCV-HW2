@@ -1,5 +1,6 @@
 #include "RandomForest.h"
 #include "task2_utils.h"
+#include <fstream>
 
 RandomForest::RandomForest()
 {
@@ -115,3 +116,56 @@ std::vector<float> RandomForest::predict(cv::Mat &feats, cv::Mat &voted_preds)
 	return confidences;
 }
 
+void RandomForest::saveTrees(std::string path){
+	for (int i = 0; i < mTreeCount; i++) {
+		mTrees[i]->save(path + std::string("tree_") + std::to_string(i) + std::string(".yml"));
+	}
+}
+
+void RandomForest::saveParams(std::string path){
+	std::ofstream file(path + std::string("params.txt"));
+	file << mTreeCount << " " << mMaxDepth << " " << mCVFolds << " " << mMinSampleCount << " " << mMaxCategories << std::endl;
+}
+
+void RandomForest::saveModel(std::string path){
+	std::cout<<"RandomForest::saveModel runs..."<<std::endl;
+	saveParams(path);
+	saveTrees(path);
+	std::cout<<"RandomForest::saveModel finishes."<<std::endl;
+}
+
+void RandomForest::loadModel(std::string path){
+	std::cout<<"RandomForest::loadModel runs..."<<std::endl;
+	std::vector<std::string> filenames;
+	cv::utils::fs::glob_relative(path, std::string("*.txt"), filenames);
+
+	std::ifstream file(path + filenames[0]);
+  	std::string line;
+	std::getline(file, line);
+    std::stringstream linestream(line);
+	linestream >> mTreeCount >> mMaxDepth >> mCVFolds >> mMinSampleCount >> mMaxCategories;
+
+	std::cout<<std::endl;
+	printParams();
+	std::cout<<std::endl;
+
+	filenames.clear();
+	cv::utils::fs::glob_relative(path, std::string("tree_*.yml"), filenames);
+
+	mTrees.clear();
+	cv::Ptr<cv::ml::DTrees> tree;
+	for(int i = 0; i < filenames.size(); i++){
+		tree = cv::ml::DTrees::load(path + filenames[i]);
+		mTrees.push_back(tree);
+	}
+	std::cout<<"RandomForest::loadModel finishes."<<std::endl;
+}
+
+void RandomForest::printParams(){
+	std::cout << "Parameters:" << std::endl;
+	std::cout << "Tree Count: " << mTreeCount << std::endl;
+	std::cout << "Max Categories: " << mMaxCategories << std::endl;
+	std::cout << "Max Depth (for all trees): " << mMaxDepth << std::endl;
+	std::cout << "CV Folds (for all trees): " << mCVFolds << std::endl;
+	std::cout << "Min Sample Count (for all trees): " << mMinSampleCount << std::endl;
+}

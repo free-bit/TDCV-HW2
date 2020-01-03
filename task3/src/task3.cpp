@@ -12,18 +12,20 @@
   #define TRAIN "..\\..\\data\\task3\\train"
   #define TEST "..\\..\\data\\task3\\test"
   #define GT "..\\..\\data\\task3\\gt"
+  #define MODEL "..\\model"
 #else //LINUX
   #define TRAIN "../../data/task3/train"
   #define TEST "../../data/task3/test"
   #define GT "../../data/task3/gt"
+  #define MODEL "../model/"
 #endif
 #define BACKGROUND 3
 #define NUM_CLASS 3
 #define IOU_THRESH 0.5
-#define CONF_RESOLUTION 1.0    //40
-#define LOWER_CONF_THRESH 0.6  //0.5
-#define HIGHER_CONF_THRESH 1.0 //0.9
-#define VISUAL_INDEX 0
+#define CONF_RESOLUTION 40.0   //40
+#define LOWER_CONF_THRESH 0.5  //0.5
+#define HIGHER_CONF_THRESH 0.9 //0.9
+#define VISUAL_INDEX 10
 
 // using namespace std;
 
@@ -135,7 +137,9 @@ std::vector<std::vector<std::tuple<int, int, float, int>>> tryDifferentConfThres
   std::vector<std::vector<std::tuple<int, int, float, int>>> best_fits;
   // Keep best bounding box for a specific confidence threshold
   std::vector<std::tuple<int, int, float, int>> best_fit;
-  for(float conf_thresh = LOWER_CONF_THRESH; conf_thresh <= HIGHER_CONF_THRESH; conf_thresh += 1/CONF_RESOLUTION){
+  float step = (HIGHER_CONF_THRESH-LOWER_CONF_THRESH)/CONF_RESOLUTION;
+  for(float conf_thresh = LOWER_CONF_THRESH; conf_thresh <= HIGHER_CONF_THRESH; conf_thresh += step){
+    std::cout<<"Using conf_thresh: "<<conf_thresh<<std::endl;
     best_fit = tryDifferentScale(forest, im, start_size, end_size, size_step, box_stride, conf_thresh);
     best_fits.push_back(best_fit);
   }
@@ -149,7 +153,6 @@ std::vector<cv::Rect> readGT(std::string path){
 
   while(std::getline(file, line)){
       std::stringstream linestream(line);
-      std::string data;
       int cls, x_top, y_top, x_bot, y_bot;
 
       linestream >> cls >> x_top >> y_top >> x_bot >> y_bot;
@@ -165,7 +168,7 @@ int getIOU(const cv::Rect &pred_box, const cv::Rect &gt_box, float thresh){
   return (i / u) > thresh;
 }
 
-int main(){
+int main(int argc, char *argv[]){
     cv::Scalar red(0, 0, 255);  //Class-0
     cv::Scalar green(0, 255, 0);//Class-1
     cv::Scalar blue(255, 0, 0); //Class-2
@@ -181,17 +184,40 @@ int main(){
 
     // Initialize forest
     int treeCount = 200, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 4;
-    RandomForest forest(treeCount, maxDepth, CVFolds, minSampleCount, maxCategories);    
+    RandomForest forest(treeCount, maxDepth, CVFolds, minSampleCount, maxCategories);
 
-    // Load train images and labels
-    std::string train_path(TRAIN);
-    cv::Mat train_gt_labels;
-    cv::Mat train_feats;
-    readFiles(train_path, train_gt_labels, train_feats);
-    cv::Ptr<cv::ml::TrainData> train_data =  cv::ml::TrainData::create(train_feats, cv::ml::ROW_SAMPLE, train_gt_labels);
+    std::string flag;
+    if (argc >= 2){
+      flag = argv[1];
+    }  
 
-    // Train the forest
-    forest.train(train_data);
+    // Perform training
+    if (flag.empty() || flag == "--train"){
+      // Load train images and labels
+      path = TRAIN;
+      cv::Mat train_gt_labels;
+      cv::Mat train_feats;
+      readFiles(path, train_gt_labels, train_feats);
+      cv::Ptr<cv::ml::TrainData> train_data =  cv::ml::TrainData::create(train_feats, cv::ml::ROW_SAMPLE, train_gt_labels);
+
+      // Train the forest
+      forest.train(train_data);
+
+      // Save the trained model
+      path = MODEL;
+      forest.saveModel(path);
+    }
+    // Don't train, use pretrained model
+    else if (flag == "--load"){
+      // Load the pretrained model
+      path = MODEL;
+      forest.loadModel(path);
+    }
+    else{
+      std::cout << "Invalid argument: " << flag << std::endl;
+      std::cout << "Usage: ./task3 [--train/--load]" << std::endl;
+      exit(-1);
+    }
 
     cv::Mat im;
     path = TEST;
@@ -203,7 +229,8 @@ int main(){
     int start_size = 70, end_size = 210, size_step = 10, box_stride = 10;
     // Create vector of IOU threshold values
     std::vector<std::tuple<float, int, int, int>> evaluate_pr; //float: threshold, int-1: tp, int-2: fp, int-3: fn
-    for(float i = LOWER_CONF_THRESH; i <= HIGHER_CONF_THRESH; i += 1/CONF_RESOLUTION){
+    float step = (HIGHER_CONF_THRESH-LOWER_CONF_THRESH)/CONF_RESOLUTION;
+    for(float i = LOWER_CONF_THRESH; i <= HIGHER_CONF_THRESH; i += step){
       evaluate_pr.push_back(std::tuple<float, int, int, int>(i, 0, 0, 0));
     }
 
@@ -239,7 +266,8 @@ int main(){
         cv::rectangle(im, visual_box, colors[j], 2); // Drawing prediction from one of the confidence thresholds 
       }
       cv::imshow("", im);
-      cv::waitKey(500); // Wait 0.5 secs
+      imwrite(std::string("../preds/predicted_") + std::to_string(i) + std::string(".jpg"), im);
+      // cv::waitKey(500); // Wait 0.5 secs
 
       printf("Detecting image-%d completed.\n", i);
     }
