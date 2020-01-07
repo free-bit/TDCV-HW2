@@ -59,12 +59,20 @@ void augmentImages(std::string path, std::string output_path){
         // cv::imwrite(output_path + class_name + name + "_rot270" + ext, im_tmp);
 
         // Gaussian blur with kernels 5x5, 11x11, 19x19
-        cv::GaussianBlur(im, im_tmp, cv::Size(5, 5), 0, 0);
-        cv::imwrite(output_path + class_name + name + "_blur_5x5" + ext, im_tmp);
-        cv::GaussianBlur(im, im_tmp, cv::Size(11, 11), 0, 0);
-        cv::imwrite(output_path + class_name + name + "_blur_11x11" + ext, im_tmp);
-        cv::GaussianBlur(im, im_tmp, cv::Size(19, 19), 0, 0);
-        cv::imwrite(output_path + class_name + name + "_blur_19x19" + ext, im_tmp);
+        // cv::GaussianBlur(im, im_tmp, cv::Size(5, 5), 0, 0);
+        // cv::imwrite(output_path + class_name + name + "_blur_5x5" + ext, im_tmp);
+        // cv::GaussianBlur(im, im_tmp, cv::Size(11, 11), 0, 0);
+        // cv::imwrite(output_path + class_name + name + "_blur_11x11" + ext, im_tmp);
+        // cv::GaussianBlur(im, im_tmp, cv::Size(19, 19), 0, 0);
+        // cv::imwrite(output_path + class_name + name + "_blur_19x19" + ext, im_tmp);
+
+        // Flip wrt x, y and origin
+        cv::flip(im, im_tmp, 0);
+        cv::imwrite(output_path + class_name + name + "_flip-x.jpg", im_tmp);
+        cv::flip(im, im_tmp, 1);
+        cv::imwrite(output_path + class_name + name + "_flip-y.jpg", im_tmp);
+        cv::flip(im, im_tmp, -1);
+        cv::imwrite(output_path + class_name + name + "_flip-0.jpg", im_tmp);
 	}
 	std::cout<<"augmentImages finishes."<<std::endl;
 }
