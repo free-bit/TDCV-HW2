@@ -2,11 +2,14 @@
 #include "HOGDescriptor.h"
 #include <regex>
 
+/*
+Read the files from given path (test or train directory)
+Get labels of images
+Get HOG descriptors of images
+Return ground truth labels and extracted features
+*/
 void readFiles(std::string path, cv::Mat &gt_labels, cv::Mat &feats) {
 	std::cout<<"readFiles runs..."<<std::endl;
-	// Read the files from test or train directory
-	// Get labels of images
-	// Get HOG descriptors of images (+ GT)
 
 	// Get all files under path recursively, store paths on filepaths vector
 	std::vector<std::string> filepaths;
@@ -26,14 +29,13 @@ void readFiles(std::string path, cv::Mat &gt_labels, cv::Mat &feats) {
 		std::ssub_match class_idx = label_match[1];
 		gt_labels.push_back(std::stoi(class_idx.str()));
 		
-
 		// Read image in the path
 		cv::Mat im = cv::imread(filepaths[i]);
 
-		// Get HoG of the image (TODO: HoG parameters can be set here)
-		HOGDescriptor hog;
+		// Get HoG of the image
+		HOGDescriptor hog; // Using default parameters
 		std::vector<float> feat;
-		hog.detectHOGDescriptor(im, feat, false);
+		hog.detectHOGDescriptor(im, feat, false); // false: Don't visiualize
 		cv::Mat feat_mat = cv::Mat(feat).clone();
         feat_mat.convertTo(feat_mat, CV_32F);
 		feat_mat = feat_mat.reshape(1,1);
@@ -42,6 +44,7 @@ void readFiles(std::string path, cv::Mat &gt_labels, cv::Mat &feats) {
 	std::cout<<"readFiles finishes."<<std::endl;
 }
 
+// Create a shuffled index array based on given size (values in range: [0-size-1])
 std::vector<int> perm(int size) {
 	std::vector<int> indexes;
 	// Create index array

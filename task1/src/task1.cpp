@@ -14,13 +14,17 @@ int main(){
 
 	HOGDescriptor hog;
 	std::vector<float> feat;
+	
+	// Set parameters:
 	hog.setWinSize(cv::Size(64, 64));
 	hog.setBlockSize(cv::Size(16, 16));
 	hog.setBlockStep(cv::Size(8, 8));
 	hog.setCellSize(cv::Size(8, 8));
 	hog.setWinStride(cv::Size(0, 0));
 	hog.setPadSize(cv::Size(0, 0));
+
 	hog.printParams();
+
 	hog.detectHOGDescriptor(im, feat, true);
 
 	return 0;

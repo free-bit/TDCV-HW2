@@ -12,6 +12,7 @@ void HOGDescriptor::printParams(){
 	std::cout<<"Pad Size: "<<pad_size<<std::endl;
 }
 
+// Default initializer
 void HOGDescriptor::initDetector() {
     // Initialize hog detector
 	//initialize default parameters(win_size, block_size, block_step,....)
@@ -23,9 +24,7 @@ void HOGDescriptor::initDetector() {
 	pad_size = cv::Size(0, 0);
 
 	hog_detector = cv::HOGDescriptor(win_size, block_size, block_step, cell_size, 9);
-    //Fill code here
     is_init = true;
-
 }
 
 // Use references to prevent OpenCV from copying hog_detector all the time!
@@ -43,26 +42,16 @@ void HOGDescriptor::detectHOGDescriptor(cv::Mat &im, std::vector<float> &feat, b
         initDetector();
     }
 
-   // Fill code here
-	/* pad your image
-	* resize your image
-	* use the built in function "compute" to get the HOG descriptors
-	*/
-
 	cv::resize(im, im, cv::Size(64, 64));
 	hog_detector.compute(im, feat, win_stride, pad_size);
 
 	if (show) {
 		visualizeHOG(im, feat, hog_detector, 10);
 	}
-
-
-
 }
 
-//returns instance of cv::HOGDescriptor
+// Returns instance of cv::HOGDescriptor
 cv::HOGDescriptor & HOGDescriptor::getHog_detector() {
-     //Fill code here
 	return this->hog_detector;
 }
 

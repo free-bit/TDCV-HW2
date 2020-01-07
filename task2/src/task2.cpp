@@ -15,8 +15,6 @@
   #define TEST "../../data/task2/test"
 #endif
 
-// using namespace std;
-
 template<class ClassifierType>
 void performanceEval(cv::Ptr<ClassifierType> classifier, cv::Ptr<cv::ml::TrainData> data) {
 
@@ -24,7 +22,7 @@ void performanceEval(cv::Ptr<ClassifierType> classifier, cv::Ptr<cv::ml::TrainDa
     cv::Mat gt_labels = data->getResponses();
     cv::Mat pred_labels;
 
-    classifier->predict(feats, pred_labels);//feats: contain hog per row, pred_labels is a col vector of labels
+    classifier->predict(feats, pred_labels); //feats: contain hog per row, pred_labels is a col vector of labels
 
     
     float accuracy = 0;
@@ -38,7 +36,7 @@ void performanceEval(cv::Ptr<ClassifierType> classifier, cv::Ptr<cv::ml::TrainDa
         accuracy++;
     }
     accuracy /= total_instances;
-    std::cout<<"Accuracy: "<<accuracy<<std::endl;
+    std::cout<<"\nAccuracy: "<<accuracy<<"\n"<<std::endl;
 };
 
 
@@ -75,7 +73,9 @@ void testDTrees() {
     readFiles(test_path, test_gt_labels, test_feats);
     cv::Ptr<cv::ml::TrainData> test_data =  cv::ml::TrainData::create(test_feats, cv::ml::ROW_SAMPLE, test_gt_labels);
 
+    std::cout<<"Performance evaluation for DTrees with training data:"<<std::endl;
     performanceEval<cv::ml::DTrees>(dtree, train_data);
+    std::cout<<"Performance evaluation for DTrees with test data:"<<std::endl;
     performanceEval<cv::ml::DTrees>(dtree, test_data);
 
 }
@@ -83,7 +83,7 @@ void testDTrees() {
 
 void testForest(){
 
-    int treeCount = 15, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 6;
+    int treeCount = 200, maxDepth = 20, CVFolds = 1, minSampleCount = 1, maxCategories = 6;
     /* 
       * 
       * Create your data (i.e Use HOG from task 1 to compute the descriptor for your images)
@@ -111,13 +111,15 @@ void testForest(){
     readFiles(test_path, test_gt_labels, test_feats);
     cv::Ptr<cv::ml::TrainData> test_data =  cv::ml::TrainData::create(test_feats, cv::ml::ROW_SAMPLE, test_gt_labels);
 
+    std::cout<<"Performance evaluation for Forest with training data:"<<std::endl;
     performanceEval<RandomForest>(forest, train_data);
+    std::cout<<"Performance evaluation for Forest with test data:"<<std::endl;
     performanceEval<RandomForest>(forest, test_data);
 }
 
 
 int main(){
-    //testDTrees();
+    testDTrees();
     testForest();
     return 0;
 }
