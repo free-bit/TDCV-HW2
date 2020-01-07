@@ -1,5 +1,6 @@
 #include "RandomForest.h"
 #include "task2_utils.h"
+#include <fstream>
 
 RandomForest::RandomForest()
 {
@@ -70,7 +71,7 @@ void RandomForest::train(cv::Ptr<cv::ml::TrainData> &data)
     cv::Mat feats = data->getSamples();
     cv::Mat gt_labels = data->getResponses();
 	// set_size is the size of the subset of the training data
-	int set_size = feats.rows / mMaxCategories;
+	int set_size = feats.rows / 10;
 
 	for (int i = 0; i < mTreeCount; i++) {
 		std::vector<int> perm_indices = perm(feats.rows); // permuted indices of size number of training data
@@ -88,8 +89,6 @@ void RandomForest::train(cv::Ptr<cv::ml::TrainData> &data)
 
 std::vector<float> RandomForest::predict(cv::Mat &feats, cv::Mat &voted_preds)
 {
-	std::cout<<"RandomForest::predict runs..."<<std::endl;
-
 	std::vector<int> voted_preds_vec(feats.rows);
 	std::vector<float> confidences(feats.rows);
 	for (int i = 0; i < feats.rows; i++) {
@@ -108,13 +107,65 @@ std::vector<float> RandomForest::predict(cv::Mat &feats, cv::Mat &voted_preds)
 				max_index = j;
 			}
 		}
-		voted_preds_vec[i] = max_index;
-		confidences[i] = max / (float) mTreeCount;
+		voted_preds_vec[i] = max_index;			   // Per image keep the predicted class index
+		confidences[i] = max / (float) mTreeCount; // Per image take confidence of top voted class
 	}
 	voted_preds = cv::Mat(voted_preds_vec).clone();
     voted_preds.convertTo(voted_preds, CV_32F);
 	voted_preds = voted_preds.reshape(1, 1);
-	std::cout<<"RandomForest::predict finished"<<std::endl;
 	return confidences;
 }
 
+void RandomForest::saveTrees(std::string path){
+	for (int i = 0; i < mTreeCount; i++) {
+		mTrees[i]->save(path + std::string("tree_") + std::to_string(i) + std::string(".yml"));
+	}
+}
+
+void RandomForest::saveParams(std::string path){
+	std::ofstream file(path + std::string("params.txt"));
+	file << mTreeCount << " " << mMaxDepth << " " << mCVFolds << " " << mMinSampleCount << " " << mMaxCategories << std::endl;
+}
+
+void RandomForest::saveModel(std::string path){
+	std::cout<<"RandomForest::saveModel runs..."<<std::endl;
+	saveParams(path);
+	saveTrees(path);
+	std::cout<<"RandomForest::saveModel finishes."<<std::endl;
+}
+
+void RandomForest::loadModel(std::string path){
+	std::cout<<"RandomForest::loadModel runs..."<<std::endl;
+	std::vector<std::string> filenames;
+	cv::utils::fs::glob_relative(path, std::string("*.txt"), filenames);
+
+	std::ifstream file(path + filenames[0]);
+  	std::string line;
+	std::getline(file, line);
+    std::stringstream linestream(line);
+	linestream >> mTreeCount >> mMaxDepth >> mCVFolds >> mMinSampleCount >> mMaxCategories;
+
+	std::cout<<std::endl;
+	printParams();
+	std::cout<<std::endl;
+
+	filenames.clear();
+	cv::utils::fs::glob_relative(path, std::string("tree_*.yml"), filenames);
+
+	mTrees.clear();
+	cv::Ptr<cv::ml::DTrees> tree;
+	for(int i = 0; i < filenames.size(); i++){
+		tree = cv::ml::DTrees::load(path + filenames[i]);
+		mTrees.push_back(tree);
+	}
+	std::cout<<"RandomForest::loadModel finishes."<<std::endl;
+}
+
+void RandomForest::printParams(){
+	std::cout << "Parameters:" << std::endl;
+	std::cout << "Tree Count: " << mTreeCount << std::endl;
+	std::cout << "Max Categories: " << mMaxCategories << std::endl;
+	std::cout << "Max Depth (for all trees): " << mMaxDepth << std::endl;
+	std::cout << "CV Folds (for all trees): " << mCVFolds << std::endl;
+	std::cout << "Min Sample Count (for all trees): " << mMinSampleCount << std::endl;
+}

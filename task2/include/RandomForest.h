@@ -5,7 +5,9 @@
 
 
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/utils/filesystem.hpp>
 #include <vector>
+#include <string>
 
 class RandomForest
 {
@@ -27,6 +29,12 @@ public:
     void train(cv::Ptr<cv::ml::TrainData> &data);
 
     std::vector<float> predict(cv::Mat &feats, cv::Mat &voted_preds);
+
+    void saveTrees(std::string path);
+    void saveParams(std::string path);
+    void saveModel(std::string path);
+    void loadModel(std::string path);
+    void printParams();
 
 
 private:
