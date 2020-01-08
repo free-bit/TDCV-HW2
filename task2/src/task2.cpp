@@ -26,7 +26,7 @@ void performanceEval(cv::Ptr<ClassifierType> classifier, cv::Ptr<cv::ml::TrainDa
 
     
     float accuracy = 0;
-    float total_instances = pred_labels.cols;
+    float total_instances = feats.rows;
 
     for(int j = 0; j<total_instances; j++){
       int gt_label = gt_labels.at<int>(0, j);
